@@ -4,6 +4,7 @@ import { Sun, Wind, Droplets, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/context/AuthContext";
 import type { EnergyOffer } from "@shared/schema";
 
 interface EnergyOfferCardProps {
@@ -27,15 +28,17 @@ const energyTypeColors = {
 export default function EnergyOfferCard({ offer }: EnergyOfferCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   const Icon = energyTypeIcons[offer.energyType as keyof typeof energyTypeIcons] || Zap;
   const colorClass = energyTypeColors[offer.energyType as keyof typeof energyTypeColors] || "bg-gray-500";
 
   const buyEnergyMutation = useMutation({
     mutationFn: async () => {
+      if (!user) throw new Error('User not authenticated');
       return apiRequest('POST', '/api/transactions', {
         offerId: offer.id,
-        buyerId: 'current-user-id', // This should come from auth context
+        buyerId: user.id,
         sellerId: offer.sellerId,
         energyAmount: offer.energyAmount,
         totalPrice: (parseFloat(offer.energyAmount) * parseFloat(offer.pricePerKwh)).toString(),

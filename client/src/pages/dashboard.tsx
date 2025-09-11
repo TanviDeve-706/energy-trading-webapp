@@ -1,4 +1,3 @@
-import { useState } from "react";
 import Header from "@/components/layout/header";
 import EnergyStats from "@/components/energy/energy-stats";
 import EnergyOfferCard from "@/components/energy/energy-offer-card";
@@ -6,19 +5,21 @@ import CreateOfferForm from "@/components/energy/create-offer-form";
 import TransactionHistory from "@/components/energy/transaction-history";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/context/AuthContext";
 import type { EnergyOffer } from "@shared/schema";
 
 export default function Dashboard() {
-  const [userType, setUserType] = useState<'prosumer' | 'consumer'>('prosumer');
+  const { user, updateUserType } = useAuth();
 
   const { data: offersData, isLoading: offersLoading } = useQuery<{ offers: EnergyOffer[] }>({
     queryKey: ['/api/energy/offers'],
   });
 
   const offers = offersData?.offers || [];
+  const userType = user?.userType || 'consumer';
 
   const handleUserTypeToggle = (type: 'prosumer' | 'consumer') => {
-    setUserType(type);
+    updateUserType(type);
   };
 
   return (

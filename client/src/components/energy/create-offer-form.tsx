@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/context/AuthContext";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 
@@ -28,11 +29,13 @@ export default function CreateOfferForm() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const createOfferMutation = useMutation({
     mutationFn: async (data: any) => {
+      if (!user) throw new Error('User not authenticated');
       return apiRequest('POST', '/api/energy/offers', {
-        sellerId: 'current-user-id', // This should come from auth context
+        sellerId: user.id,
         ...data,
       });
     },
