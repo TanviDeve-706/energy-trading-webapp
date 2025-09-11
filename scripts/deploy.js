@@ -1,4 +1,4 @@
-const hre = require("hardhat");
+import hre from "hardhat";
 
 async function main() {
   console.log("Deploying EnergyTrading contract...");
@@ -31,14 +31,20 @@ async function main() {
   }
 
   // Save deployment info
-  const fs = require("fs");
+  const { writeFileSync, mkdirSync } = await import("fs");
   const deploymentInfo = {
     network: hre.network.name,
     contractAddress: address,
     deployedAt: new Date().toISOString(),
   };
 
-  fs.writeFileSync(
+  try {
+    mkdirSync("./deployments", { recursive: true });
+  } catch (e) {
+    // Directory might already exist
+  }
+
+  writeFileSync(
     `./deployments/${hre.network.name}.json`,
     JSON.stringify(deploymentInfo, null, 2)
   );

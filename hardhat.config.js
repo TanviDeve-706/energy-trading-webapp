@@ -1,7 +1,7 @@
-require("@nomicfoundation/hardhat-toolbox");
+import "@nomicfoundation/hardhat-toolbox";
 
 /** @type import('hardhat/config').HardhatUserConfig */
-module.exports = {
+const config = {
   solidity: {
     version: "0.8.19",
     settings: {
@@ -36,3 +36,5 @@ module.exports = {
   },
   defaultNetwork: "hardhat"
 };
+
+export default config;

@@ -1,4 +1,8 @@
 import { 
+  users,
+  energyOffers,
+  energyTransactions,
+  energyGeneration,
   type User, 
   type InsertUser, 
   type EnergyOffer, 
@@ -8,7 +12,8 @@ import {
   type EnergyGeneration,
   type InsertEnergyGeneration
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc, and, or } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -35,116 +40,126 @@ export interface IStorage {
   updateEnergyGeneration(userId: string, generation: InsertEnergyGeneration): Promise<EnergyGeneration>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private energyOffers: Map<string, EnergyOffer>;
-  private energyTransactions: Map<string, EnergyTransaction>;
-  private energyGeneration: Map<string, EnergyGeneration>;
-
-  constructor() {
-    this.users = new Map();
-    this.energyOffers = new Map();
-    this.energyTransactions = new Map();
-    this.energyGeneration = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async getUserByWalletAddress(walletAddress: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.walletAddress === walletAddress,
-    );
+    const [user] = await db.select().from(users).where(eq(users.walletAddress, walletAddress));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      createdAt: new Date()
-    };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values({
+        ...insertUser,
+        walletAddress: insertUser.walletAddress || null,
+        userType: insertUser.userType || "consumer",
+      })
+      .returning();
     return user;
   }
 
   async updateUserWallet(id: string, walletAddress: string): Promise<User> {
-    const user = this.users.get(id);
-    if (!user) throw new Error("User not found");
+    const [user] = await db
+      .update(users)
+      .set({ walletAddress })
+      .where(eq(users.id, id))
+      .returning();
     
-    const updatedUser = { ...user, walletAddress };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    if (!user) throw new Error("User not found");
+    return user;
   }
 
   async getEnergyOffers(limit = 50): Promise<EnergyOffer[]> {
-    return Array.from(this.energyOffers.values())
-      .filter(offer => offer.isActive)
-      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-      .slice(0, limit);
+    const offers = await db
+      .select()
+      .from(energyOffers)
+      .where(eq(energyOffers.isActive, true))
+      .orderBy(desc(energyOffers.createdAt))
+      .limit(limit);
+    return offers;
   }
 
   async getEnergyOffer(id: string): Promise<EnergyOffer | undefined> {
-    return this.energyOffers.get(id);
+    const [offer] = await db.select().from(energyOffers).where(eq(energyOffers.id, id));
+    return offer || undefined;
   }
 
   async getOffersBySeller(sellerId: string): Promise<EnergyOffer[]> {
-    return Array.from(this.energyOffers.values()).filter(
-      (offer) => offer.sellerId === sellerId,
-    );
+    const offers = await db
+      .select()
+      .from(energyOffers)
+      .where(eq(energyOffers.sellerId, sellerId));
+    return offers;
   }
 
   async createEnergyOffer(insertOffer: InsertEnergyOffer): Promise<EnergyOffer> {
-    const id = randomUUID();
-    const offer: EnergyOffer = { 
-      ...insertOffer, 
-      id,
-      isActive: true,
-      createdAt: new Date()
-    };
-    this.energyOffers.set(id, offer);
+    const [offer] = await db
+      .insert(energyOffers)
+      .values({
+        ...insertOffer,
+        location: insertOffer.location || null,
+        isActive: true,
+        contractAddress: null,
+        transactionHash: null,
+      })
+      .returning();
     return offer;
   }
 
   async updateOfferStatus(id: string, isActive: boolean): Promise<EnergyOffer> {
-    const offer = this.energyOffers.get(id);
-    if (!offer) throw new Error("Offer not found");
+    const [offer] = await db
+      .update(energyOffers)
+      .set({ isActive })
+      .where(eq(energyOffers.id, id))
+      .returning();
     
-    const updatedOffer = { ...offer, isActive };
-    this.energyOffers.set(id, updatedOffer);
-    return updatedOffer;
+    if (!offer) throw new Error("Offer not found");
+    return offer;
   }
 
   async getTransactions(userId?: string, limit = 50): Promise<EnergyTransaction[]> {
-    let transactions = Array.from(this.energyTransactions.values());
-    
     if (userId) {
-      transactions = transactions.filter(
-        (tx) => tx.buyerId === userId || tx.sellerId === userId,
-      );
+      const transactions = await db
+        .select()
+        .from(energyTransactions)
+        .where(or(
+          eq(energyTransactions.buyerId, userId),
+          eq(energyTransactions.sellerId, userId)
+        ))
+        .orderBy(desc(energyTransactions.createdAt))
+        .limit(limit);
+      return transactions;
     }
 
-    return transactions
-      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-      .slice(0, limit);
+    const transactions = await db
+      .select()
+      .from(energyTransactions)
+      .orderBy(desc(energyTransactions.createdAt))
+      .limit(limit);
+    
+    return transactions;
   }
 
   async createTransaction(insertTransaction: InsertEnergyTransaction): Promise<EnergyTransaction> {
-    const id = randomUUID();
-    const transaction: EnergyTransaction = { 
-      ...insertTransaction, 
-      id,
-      status: "pending",
-      createdAt: new Date()
-    };
-    this.energyTransactions.set(id, transaction);
+    const [transaction] = await db
+      .insert(energyTransactions)
+      .values({
+        ...insertTransaction,
+        status: "pending",
+        transactionHash: insertTransaction.transactionHash || null,
+        blockNumber: insertTransaction.blockNumber || null,
+      })
+      .returning();
     return transaction;
   }
 
@@ -154,48 +169,52 @@ export class MemStorage implements IStorage {
     transactionHash?: string, 
     blockNumber?: number
   ): Promise<EnergyTransaction> {
-    const transaction = this.energyTransactions.get(id);
-    if (!transaction) throw new Error("Transaction not found");
+    const [transaction] = await db
+      .update(energyTransactions)
+      .set({
+        status,
+        transactionHash: transactionHash || null,
+        blockNumber: blockNumber || null,
+      })
+      .where(eq(energyTransactions.id, id))
+      .returning();
     
-    const updatedTransaction = { 
-      ...transaction, 
-      status, 
-      transactionHash, 
-      blockNumber 
-    };
-    this.energyTransactions.set(id, updatedTransaction);
-    return updatedTransaction;
+    if (!transaction) throw new Error("Transaction not found");
+    return transaction;
   }
 
   async getEnergyGeneration(userId: string): Promise<EnergyGeneration | undefined> {
-    return Array.from(this.energyGeneration.values()).find(
-      (gen) => gen.userId === userId,
-    );
+    const [generation] = await db
+      .select()
+      .from(energyGeneration)
+      .where(eq(energyGeneration.userId, userId));
+    return generation || undefined;
   }
 
   async updateEnergyGeneration(userId: string, insertGeneration: InsertEnergyGeneration): Promise<EnergyGeneration> {
     const existing = await this.getEnergyGeneration(userId);
     
     if (existing) {
-      const updated = { 
-        ...existing, 
-        ...insertGeneration, 
-        lastUpdated: new Date() 
-      };
-      this.energyGeneration.set(existing.id, updated);
+      const [updated] = await db
+        .update(energyGeneration)
+        .set({
+          ...insertGeneration,
+          userId,
+        })
+        .where(eq(energyGeneration.id, existing.id))
+        .returning();
       return updated;
     } else {
-      const id = randomUUID();
-      const generation: EnergyGeneration = { 
-        ...insertGeneration, 
-        id,
-        userId,
-        lastUpdated: new Date()
-      };
-      this.energyGeneration.set(id, generation);
-      return generation;
+      const [created] = await db
+        .insert(energyGeneration)
+        .values({
+          ...insertGeneration,
+          userId,
+        })
+        .returning();
+      return created;
     }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
