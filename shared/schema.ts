@@ -51,6 +51,8 @@ export const energyGeneration = pgTable("energy_generation", {
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+}).extend({
+  walletAddress: z.string().optional(),
 });
 
 export const insertEnergyOfferSchema = createInsertSchema(energyOffers).omit({
