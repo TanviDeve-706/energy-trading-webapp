@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract EnergyTrading is ReentrancyGuard, Ownable {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _offerIds;
-    Counters.Counter private _transactionIds;
+    uint256 private _offerIds;
+    uint256 private _transactionIds;
     
     struct EnergyOffer {
         uint256 id;
@@ -60,7 +57,7 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
         uint256 totalPrice
     );
     
-    constructor() {}
+    constructor() Ownable(msg.sender) {}
     
     modifier onlyRegistered() {
         require(registeredUsers[msg.sender], "User not registered");
@@ -68,7 +65,7 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
     }
     
     modifier offerExists(uint256 _offerId) {
-        require(_offerId <= _offerIds.current() && _offerId > 0, "Offer does not exist");
+        require(_offerId <= _offerIds && _offerId > 0, "Offer does not exist");
         _;
     }
     
@@ -99,8 +96,8 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
         require(_energyAmount > 0, "Energy amount must be greater than 0");
         require(_pricePerKwh > 0, "Price must be greater than 0");
         
-        _offerIds.increment();
-        uint256 newOfferId = _offerIds.current();
+        _offerIds++;
+        uint256 newOfferId = _offerIds;
         
         offers[newOfferId] = EnergyOffer({
             id: newOfferId,
@@ -136,8 +133,8 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
         offer.isActive = false;
         
         // Create transaction record
-        _transactionIds.increment();
-        uint256 newTransactionId = _transactionIds.current();
+        _transactionIds++;
+        uint256 newTransactionId = _transactionIds;
         
         transactions[newTransactionId] = EnergyTransaction({
             id: newTransactionId,
@@ -190,7 +187,7 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
         uint256 activeCount = 0;
         
         // Count active offers
-        for (uint256 i = 1; i <= _offerIds.current(); i++) {
+        for (uint256 i = 1; i <= _offerIds; i++) {
             if (offers[i].isActive) {
                 activeCount++;
             }
@@ -200,7 +197,7 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
         EnergyOffer[] memory activeOffers = new EnergyOffer[](activeCount);
         uint256 currentIndex = 0;
         
-        for (uint256 i = 1; i <= _offerIds.current(); i++) {
+        for (uint256 i = 1; i <= _offerIds; i++) {
             if (offers[i].isActive) {
                 activeOffers[currentIndex] = offers[i];
                 currentIndex++;
@@ -223,16 +220,16 @@ contract EnergyTrading is ReentrancyGuard, Ownable {
     }
     
     function getTransaction(uint256 _transactionId) external view returns (EnergyTransaction memory) {
-        require(_transactionId <= _transactionIds.current() && _transactionId > 0, "Transaction does not exist");
+        require(_transactionId <= _transactionIds && _transactionId > 0, "Transaction does not exist");
         return transactions[_transactionId];
     }
     
     function getTotalOffers() external view returns (uint256) {
-        return _offerIds.current();
+        return _offerIds;
     }
     
     function getTotalTransactions() external view returns (uint256) {
-        return _transactionIds.current();
+        return _transactionIds;
     }
     
     function isUserRegistered(address _user) external view returns (bool) {
