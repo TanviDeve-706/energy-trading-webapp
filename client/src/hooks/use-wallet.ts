@@ -23,6 +23,28 @@ export function useWallet() {
   const connectWallet = useCallback(async () => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     
+    // Check if we're in a browser environment that supports MetaMask
+    if (typeof window === 'undefined') {
+      const error = new Error('Wallet connection is only available in the browser');
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error.message,
+      }));
+      throw error;
+    }
+
+    // Check if MetaMask is available (not available in Replit preview iframe)
+    if (!window.ethereum) {
+      const error = new Error('MetaMask is not available in this window. Please open this app in a new browser tab with MetaMask installed to connect your wallet.');
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error.message,
+      }));
+      throw error;
+    }
+    
     try {
       const { provider, signer } = await initializeWeb3();
       

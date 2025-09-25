@@ -6,7 +6,7 @@ import { useWallet } from "@/hooks/use-wallet";
 
 export default function WalletConnector() {
   const [isConnecting, setIsConnecting] = useState(false);
-  const { connectWallet, isConnected } = useWallet();
+  const { connectWallet, isConnected, error } = useWallet();
   const { toast } = useToast();
 
   const handleConnect = async () => {
@@ -46,6 +46,17 @@ export default function WalletConnector() {
         {isConnecting ? "Connecting..." : "Connect Wallet"}
       </Button>
       
+      {error && error.includes('not available in this window') && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm text-amber-800 font-medium">
+            ⚠️ Open in New Tab Required
+          </p>
+          <p className="text-xs text-amber-700 mt-1">
+            MetaMask doesn't work in the Replit preview. Please open this app in a new browser tab with MetaMask installed.
+          </p>
+        </div>
+      )}
+      
       <div className="text-xs text-muted-foreground text-center">
         <p>Make sure you have MetaMask installed and unlocked.</p>
         <p className="mt-1">
@@ -59,6 +70,11 @@ export default function WalletConnector() {
             Download here
           </a>
         </p>
+        {typeof window !== 'undefined' && !window.ethereum && (
+          <p className="mt-2 text-amber-600 text-sm font-medium">
+            💡 If you're viewing this in Replit preview, open the app in a new browser tab
+          </p>
+        )}
       </div>
     </div>
   );
