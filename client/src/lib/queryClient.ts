@@ -1,5 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const BASE_URL = "http://127.0.0.1:3000"; // Backend URL
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -13,7 +15,7 @@ export async function apiRequest(
   data?: unknown | undefined,
   headers?: Record<string, string>,
 ): Promise<any> {
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE_URL}${url}`, {
     method,
     headers: { 
       ...(data ? { "Content-Type": "application/json" } : {}),
@@ -33,7 +35,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(`${BASE_URL}${queryKey.join("/")}`, {
       credentials: "include",
     });
 

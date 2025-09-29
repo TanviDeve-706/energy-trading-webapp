@@ -9,6 +9,13 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
+import bcrypt from "bcryptjs";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const jwt = require("jsonwebtoken");
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
+
 const loginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
@@ -19,10 +26,11 @@ const walletConnectSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
     try {
+      console.log("Register request body:", req.body);
       const userData = insertUserSchema.parse(req.body);
       const existingUser = await storage.getUserByUsername(userData.username);
       
@@ -30,24 +38,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      const user = await storage.createUser(userData);
-      res.json({ user: { id: user.id, username: user.username, userType: user.userType } });
+      // Hash password before storing
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+      const user = await storage.createUser({
+        ...userData,
+        password: hashedPassword,
+      });
+
+      // Optionally return a token immediately after registration
+      const token = jwt.sign(
+        { id: user.id, username: user.username, userType: user.userType },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      res.json({ 
+        token,
+        user: { id: user.id, username: user.username, userType: user.userType, walletAddress: null } 
+      });
     } catch (error) {
+      console.log("Registration error:", error);
       res.status(400).json({ message: "Invalid registration data", error });
     }
   });
 
   app.post("/api/auth/login", async (req, res) => {
     try {
+      console.log("Login request body:", req.body);
       const { username, password } = loginSchema.parse(req.body);
       const user = await storage.getUserByUsername(username);
       
-      if (!user || user.password !== password) {
+      if (!user) {
+        console.log("User not found:", username);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      res.json({ user: { id: user.id, username: user.username, userType: user.userType, walletAddress: user.walletAddress } });
+      // Compare hashed password
+      const passwordMatches = await bcrypt.compare(password, user.password);
+      if (!passwordMatches) {
+        console.log("Password mismatch for user:", username);
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Issue JWT token
+      const token = jwt.sign(
+        { id: user.id, username: user.username, userType: user.userType },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      res.json({ 
+        token,
+        user: { id: user.id, username: user.username, userType: user.userType, walletAddress: user.walletAddress } 
+      });
     } catch (error) {
+      console.log("Login error:", error);
       res.status(400).json({ message: "Invalid login data", error });
     }
   });
@@ -65,6 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.updateUserWallet(userId, walletAddress);
       res.json({ user: { id: user.id, username: user.username, userType: user.userType, walletAddress: user.walletAddress } });
     } catch (error) {
+      console.log("Wallet connect error:", error);
       res.status(400).json({ message: "Failed to connect wallet", error });
     }
   });
@@ -76,6 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const offers = await storage.getEnergyOffers(limit);
       res.json({ offers });
     } catch (error) {
+      console.log("Fetch offers error:", error);
       res.status(500).json({ message: "Failed to fetch offers", error });
     }
   });
@@ -88,6 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ offer });
     } catch (error) {
+      console.log("Fetch offer error:", error);
       res.status(500).json({ message: "Failed to fetch offer", error });
     }
   });
@@ -98,6 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const offer = await storage.createEnergyOffer(offerData);
       res.json({ offer });
     } catch (error) {
+      console.log("Create offer error:", error);
       res.status(400).json({ message: "Invalid offer data", error });
     }
   });
@@ -108,6 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const offer = await storage.updateOfferStatus(req.params.id, isActive);
       res.json({ offer });
     } catch (error) {
+      console.log("Update offer status error:", error);
       res.status(400).json({ message: "Failed to update offer status", error });
     }
   });
@@ -120,6 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactions = await storage.getTransactions(userId, limit);
       res.json({ transactions });
     } catch (error) {
+      console.log("Fetch transactions error:", error);
       res.status(500).json({ message: "Failed to fetch transactions", error });
     }
   });
@@ -130,6 +182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transaction = await storage.createTransaction(transactionData);
       res.json({ transaction });
     } catch (error) {
+      console.log("Create transaction error:", error);
       res.status(400).json({ message: "Invalid transaction data", error });
     }
   });
@@ -150,6 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json({ transaction });
     } catch (error) {
+      console.log("Update transaction status error:", error);
       res.status(400).json({ message: "Failed to update transaction status", error });
     }
   });
@@ -160,6 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const generation = await storage.getEnergyGeneration(req.params.userId);
       res.json({ generation });
     } catch (error) {
+      console.log("Fetch generation error:", error);
       res.status(500).json({ message: "Failed to fetch energy generation data", error });
     }
   });
@@ -170,6 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const generation = await storage.updateEnergyGeneration(generationData.userId, generationData);
       res.json({ generation });
     } catch (error) {
+      console.log("Update generation error:", error);
       res.status(400).json({ message: "Invalid generation data", error });
     }
   });
